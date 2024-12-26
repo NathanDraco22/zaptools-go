@@ -4,10 +4,12 @@ import (
 	zap "github.com/NathanDraco22/zaptools-go/src"
 )
 
-func NewConnector(register *zap.EventRegister, stdConn zap.StdConn) *zap.ZapConnector {
+func NewConnector(register *zap.EventRegister, stdConn zap.StdConn, connectionId string) *zap.ZapConnector {
 	return &zap.ZapConnector{
 		Register: register,
-		StdConn: stdConn,}
+		StdConn: stdConn,
+		ConnectionId: connectionId,
+	}
 }
 
 func NewRegister() *zap.EventRegister {
