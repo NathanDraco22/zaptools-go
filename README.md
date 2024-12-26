@@ -24,142 +24,220 @@ go get github.com/NathanDraco22/zaptools-go
 ```
 
 #### Gorilla Mux
+This example is using echo framework, but you can use any framework compatible with gorilla websocket like Gin Framework.
 ```go
-	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+package main
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/NathanDraco22/zaptools-go"
+	"github.com/NathanDraco22/zaptools-go/zap"
+	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
+)
+
+
+var register = zaptools.NewRegister()
+
+
+func registEvents() {
+
+	// Triggered when a new connection is established
+	register.OnEvent("connected", func(ctx *zap.EventContext) {
+		log.Println("new connection")
+	})
+
+	// Triggered when a connection is closed
+	register.OnEvent("disconnected", func(ctx *zap.EventContext) {
+		log.Println("disconnected")
+	})
+
+	// Triggered when an error occurs
+	register.OnEvent("error", func(ctx *zap.EventContext) {
+		log.Println("an error has occured")
+	})
+
+	// Triggered when a "hello" event is received
+	register.OnEvent("hello", func(ctx *zap.EventContext) {
+
+		// Send a response to the client, goroutine to prevent blocking
+		go ctx.Connection.SendEvent("hello", "Hello from server", map[string]interface{}{})
+		
+	})
+}
+
+
+
+func main() {
+
+	router := echo.New()
+
+	// Register events
+	registEvents()
+	
+	router.GET("/ws", func(c echo.Context) error {
+
+		// Create upgrader
+		upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+
+		// upgrade connection to websocket
+		conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		
+		// Create connector with WebSocket connection
+		zapConnector := zaptools.NewConnector(register, conn, "",)
+		
+		// Start connector
+		zapConnector.Start()
+
+		return nil
+	})
+
+	err := router.Start(":8080")
 	if err != nil {
-		log.Println(err)
-		return err
+		log.Fatal(err)
 	}
-	zapConnector := &src.ZapConnector{
-		Register: eventRegister,
-		StdConn: conn,
-	}
-	zapConnector.Start()
-
+}
 ```
 
-Firstly create a `FastAPI` and `EventRegister` instance. `EventRegister` has the responsability to create events.
-```python
-from fastapi import FastAPI, WebSocket
-from zaptools.tools import EventRegister, EventContext, Connector
-from zaptools.adapters import FastApiAdapter
+- Firstly create a new `*zap.EventRegister`, all events triggers are registered by `*zap.EventRegister`.
+- Create a websocket connection using the upgrader from gorilla websocket.
+- Call the constructor `zaptools.NewConnector()` with the register, the connection, an the ID.
+> Zaptools generate an ID if you set the ID as empty string in the `NewConnector()`
 
-app:FastAPI = FastAPI()
-register: EventRegister = EventRegister() 
+### Fiber example
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/NathanDraco22/zaptools-go"
+	"github.com/NathanDraco22/zaptools-go/zap"
+	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
+)
+
+
+var register = zaptools.NewRegister()
+
+
+func registEvents() {
+
+	// Triggered when a new connection is established
+	register.OnEvent("connected", func(ctx *zap.EventContext) {
+		log.Println("new connection")
+	})
+
+	// Triggered when a connection is closed
+	register.OnEvent("disconnected", func(ctx *zap.EventContext) {
+		log.Println("disconnected")
+	})
+
+	// Triggered when an error occurs
+	register.OnEvent("error", func(ctx *zap.EventContext) {
+		log.Println("an error has occured")
+	})
+
+	// Triggered when a "hello" event is received
+	register.OnEvent("hello", func(ctx *zap.EventContext) {
+
+		// Send a response to the client, goroutine to prevent blocking
+		go ctx.Connection.SendEvent("hello", "Hello from server", map[string]interface{}{})
+		
+	})
+}
+
+
+
+func main() {
+
+	app := fiber.New()
+
+	registEvents()
+
+	app.Use("/ws", func(ctx *fiber.Ctx) error {
+		// IsWebSocketUpgrade returns true if the client
+		// requested upgrade to the WebSocket protocol.
+		if websocket.IsWebSocketUpgrade(ctx) {
+			ctx.Locals("allowed", true)
+			return ctx.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	app.Get("/ws", websocket.New(func(conn *websocket.Conn) {
+		zapConnector := zaptools.NewConnector(register, conn, "")
+		zapConnector.Start()
+	}))
+
+	log.Fatal(app.Listen(":8080"))
+}
 ```
-For Creating events use the decorator syntax.
-This will creates an event named `"hello"` and it will call `hello_trigger` function when an event named `"hello"` is received.
-```python
-@register.on_event("hello") 
-async def hello_trigger(ctx: EventContext):
-    conn = ctx.connection
-    await conn.send("hello", "HELLO FROM SERVER !!!") 
-```
-> Event it is a class with name("hello") and the callback(hello_trigger)
 
-For connecting `EventRegister` with the websocket class provided by FastAPI framework, there is a `FastApiConnector`, use the `plug_and_start` static method of the `FastApiConnector`, it will start to receive events.
-```python
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    connector = FastApiConnector(reg, ws)
-    await connector.start()
+### StdConn Interface
+
+Actually, all structs that implement the StdConn interface can be used with the Zaptools Connector.
+
+```go
+type StdConn interface {
+	ReadMessage() (messageType int, p []byte, err error)
+	WriteMessage(messageType int, data []byte) error
+	Close() error
+}
 ```
 
-It's the same way for Sanic Framework
-#### Sanic
-```python
-from sanic import Sanic, Request, Websocket
-
-from zaptools.tools import EventRegister, EventContext
-from zaptools.connectors import SanicConnector
-
-app = Sanic("MyHelloWorldApp")
-register: EventRegister = EventRegister()
-
-@register.on_event("hello") 
-async def hello_trigger(ctx: EventContext):
-    conn = ctx.connection
-    await conn.send("hello", "HELLO FROM SERVER !!!") 
-
-@app.websocket("/")
-async def websocket(request: Request, ws: Websocket):
-    connector = SanicConnector(reg, ws)
-    await connector.start()
-
-```
 ### EventContext object
 Each element is triggered with a `EventContext` object. This `EventContext` object contains information about the current event and which `WebSocketConnection` is invoking it.
-```python
-EventContext.event_name # name of current event
-EventContext.payload # payload the data from the connection
-EventContext.connection # WebSocketConnection 
-```
-### Sending Events
-In order to response to the client use the `WebSocketConnection.send(event:str, payload:Any)`, this object is provided by the `Context`.
-```python
-@register.on_event("hello") 
-async def hello_trigger(ctx: EventContext):
-    conn = ctx.connection
-    conn.send("hello", "HELLO FROM SERVER !!!") # sending "hello" event to client with a payload.
-```
-### WebSocketConnection
-`WebSocketConnection` provides a easy interaction with the websocket.
+```go
+register.OnEvent("hello", func(ctx *zap.EventContext) {
 
-```python
-WebSocketConnection.id # ID of connection
+		eventData := ctx.EventData
+		
+		eventData.EventName // name of the event
+		eventData.Payload // payload of the events
+		eventData.Headers // headers of the events
 
-await WebSocketConnection.send(event:str, payload:Any) #Send Event to the client
-
-await WebSocketConnection.close() # Close the websocket connection
+		// Send a response to the client, goroutine to prevent blocking
+		go ctx.Connection.SendEvent("hello", "Hello from server", map[string]interface{}{})
+		
+	})
 ```
-> Coroutines need to be awaited.
 
 ### Events
 
 The `"connected"`, `"disconnected"` and `"error"` events can be used to trigger an action when a connection is started and after it is closed or when a error ocurred in a event.
 
-```python
-@register.on_event("connected")
-async def connected_trigger(ctx: EventContext):
-    print("Connection started")
+```go
 
-@register.on_event("disconnected")
-async def disconnected_trigger(ctx: EventContext):
-    print("Connection closed")
+var register = zaptools.NewRegister()
 
-@register.on_event("error")
-async def disconnected_trigger(ctx: EventContext):
-    print("An error ocurred in a event")
-    print(ctx.payload) # display error details
+
+func registEvents() {
+
+	// Triggered when a new connection is established
+	register.OnEvent("connected", func(ctx *zap.EventContext) {
+		log.Println("new connection")
+
+	})
+
+	// Triggered when a connection is closed
+	register.OnEvent("disconnected", func(ctx *zap.EventContext) {
+		log.Println("disconnected")
+	})
+
+	// Triggered when an error occurs
+	register.OnEvent("error", func(ctx *zap.EventContext) {
+		log.Println("an error has occured")
+	})
+}
 ```
 > Error details in `payload`
-
-## Client
-
-Zaptools provides a python client to connect with others zaptools server
-
-```python
-from zaptools.client import ZapClient
-
-client = ZapClient()
-await client.connect("ws://localhost:8000/") #Connect to the server
-
-await client.send("event1", {"hello":"from client"}, {}) # send a event
-
-# A generator with all event stream
-# Receive all events
-async for event in client.event_stream(): 
-        print(event.payload)
-
-
-# A generator with all connection state
-# Receive connection state
-# ONLINE, OFFLINE, CONNNECTING and ERROR state
-async for state in client.connection_state(): 
-        print(state)
-
-```
-
 
 ## Contributions are wellcome
