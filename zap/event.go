@@ -1,4 +1,4 @@
-package tools
+package zap
 
 import (
 	"encoding/json"

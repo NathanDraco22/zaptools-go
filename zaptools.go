@@ -1,7 +1,7 @@
 package zaptools
 
 import (
-	zap "github.com/NathanDraco22/zaptools-go/tools"
+	"github.com/NathanDraco22/zaptools-go/zap"
 )
 
 func NewConnector(register *zap.EventRegister, stdConn zap.StdConn, connectionId string) *zap.ZapConnector {
