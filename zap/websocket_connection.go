@@ -15,16 +15,8 @@ type WebSocketConnection struct {
 	conn StdConn
 }
 
-func (t *WebSocketConnection) SendEvent(eventName string, payload interface{}, headers map[string]interface{},) error {
-	if headers == nil {
-		headers = make(map[string]interface{})
-	}
-	eventDataMap := map[string]interface{}{
-		"eventName": eventName,
-		"payload": payload,
-		"headers": headers,
-	}
-	jsonEventData, err := json.Marshal(eventDataMap) 
+func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
+	jsonEventData, err := json.Marshal(eventData) 
 	if err != nil {
 		return err
 	}
