@@ -235,6 +235,6 @@ func registEvents() {
 	})
 }
 ```
-> Error details in `payload`
+> Error details in `payload`,  all event callbacks will be triggered in a separate goroutine
 
 ## Contributions are wellcome
