@@ -61,10 +61,7 @@ func registEvents() {
 
 	// Triggered when a "hello" event is received
 	register.OnEvent("hello", func(ctx *zap.EventContext) {
-
-		// Send a response to the client, goroutine to prevent blocking
-		go ctx.Connection.SendEvent("hello", "Hello from server", map[string]interface{}{})
-		
+		ctx.Connection.SendEvent("hello", "Hello from server", map[string]interface{}{})
 	})
 }
 

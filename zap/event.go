@@ -136,33 +136,35 @@ func (t *EventProcessor) StartEventStream(){
 		t.StdConn.Close()
 		t.NotifyDisconnected()
 	}()
+
+	contextChannel := make(chan *EventContext)
+	go func( eventCaller *EventCaller,contextChannel <-chan *EventContext ) {
+		for currentCtx := range contextChannel {
+			eventCaller.TriggerEvent(currentCtx)
+		}
+	}( t.EventCaller,contextChannel)
+
 	for {
 		_, data, err := t.StdConn.ReadMessage()
 		if err != nil {
 			t.NotifyError("Failed to read message", err)
-			t.StdConn.Close()
-			t.NotifyDisconnected()
 			return
 		}
 		var eventData EventData
 		err = json.Unmarshal(data, &eventData)
 		if err != nil {
 			t.NotifyError("Failed to unmarshal event data", err)
-			t.StdConn.Close()
-			t.NotifyDisconnected()
 			return
 		}
 
 		if eventData.EventName == "" {
-			t.StdConn.Close()
 			t.NotifyError("Invalid event", fmt.Errorf("event name is empty"))
-			t.NotifyDisconnected()
 			return
 		}
 		ctx:= &EventContext{
 			EventData: &eventData,
 			Connection: t.Connection,
 		}
-		t.EventCaller.TriggerEvent(ctx)
+		contextChannel <- ctx
 	}
 }
