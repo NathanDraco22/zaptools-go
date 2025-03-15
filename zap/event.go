@@ -138,6 +138,7 @@ func (t *EventProcessor) StartEventStream(){
 		t.NotifyDisconnected()
 	}()
 
+<<<<<<< HEAD
 	writeChannel := make(chan *[]byte)
 	t.Connection.writeChannel = writeChannel
 	
@@ -150,6 +151,14 @@ func (t *EventProcessor) StartEventStream(){
 			}
 		}
 	}(writeChannel)
+=======
+	contextChannel := make(chan *EventContext)
+	go func( eventCaller *EventCaller,contextChannel <-chan *EventContext ) {
+		for currentCtx := range contextChannel {
+			eventCaller.TriggerEvent(currentCtx)
+		}
+	}( t.EventCaller,contextChannel)
+>>>>>>> 367d1b47e4fdc6d826fcf8e1504bb6ca46c25061
 
 	for {
 		_, data, err := t.StdConn.ReadMessage()
@@ -172,7 +181,11 @@ func (t *EventProcessor) StartEventStream(){
 			EventData: &eventData,
 			Connection: t.Connection,
 		}
+<<<<<<< HEAD
 
 		t.EventCaller.TriggerEvent(ctx)
+=======
+		contextChannel <- ctx
+>>>>>>> 367d1b47e4fdc6d826fcf8e1504bb6ca46c25061
 	}
 }

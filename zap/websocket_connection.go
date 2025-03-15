@@ -17,7 +17,6 @@ type WebSocketConnection struct {
 }
 
 func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
-	
 	jsonEventData, err := json.Marshal(eventData) 
 	
 	if err != nil {
@@ -27,7 +26,6 @@ func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
 	t.writeChannel <- &jsonEventData
 	
 	return nil
-
 }
 
 
