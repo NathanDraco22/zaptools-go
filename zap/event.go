@@ -132,17 +132,24 @@ func (t *EventProcessor) NotifyError(originEventName string, err error) {
 
 func (t *EventProcessor) StartEventStream(){
 	t.NotifyConnected()
+	
 	defer func() {
 		t.StdConn.Close()
 		t.NotifyDisconnected()
 	}()
 
-	contextChannel := make(chan *EventContext)
-	go func( eventCaller *EventCaller,contextChannel <-chan *EventContext ) {
-		for currentCtx := range contextChannel {
-			eventCaller.TriggerEvent(currentCtx)
+	writeChannel := make(chan *[]byte)
+	t.Connection.writeChannel = writeChannel
+	
+	go func(messageChannel  <-chan *[]byte ) {
+		for mesageData := range messageChannel {
+			err := t.StdConn.WriteMessage(1, *mesageData)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
-	}( t.EventCaller,contextChannel)
+	}(writeChannel)
 
 	for {
 		_, data, err := t.StdConn.ReadMessage()
@@ -165,6 +172,7 @@ func (t *EventProcessor) StartEventStream(){
 			EventData: &eventData,
 			Connection: t.Connection,
 		}
-		contextChannel <- ctx
+
+		t.EventCaller.TriggerEvent(ctx)
 	}
 }

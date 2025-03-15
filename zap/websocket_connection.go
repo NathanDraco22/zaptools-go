@@ -13,17 +13,19 @@ type StdConn interface {
 type WebSocketConnection struct {
 	Id string
 	conn StdConn
+	writeChannel chan <- *[]byte
 }
 
 func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
+	
 	jsonEventData, err := json.Marshal(eventData) 
+	
 	if err != nil {
 		return err
 	}
-	err = t.conn.WriteMessage(1, jsonEventData)
-	if err != nil {
-		return err
-	}
+
+	t.writeChannel <- &jsonEventData
+	
 	return nil
 
 }
