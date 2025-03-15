@@ -5,6 +5,7 @@ type ZapConnector struct {
 	Register *EventRegister
 	StdConn StdConn
 	ConnectionId string
+	BufferSize int
 }
 
 func (t *ZapConnector) Start() {
@@ -23,5 +24,5 @@ func (t *ZapConnector) Start() {
 		EventCaller: eventCaller,
 		StdConn: t.StdConn,
 	}
-	eventProcessor.StartEventStream()
+	eventProcessor.startEventStream(t.BufferSize)
 }

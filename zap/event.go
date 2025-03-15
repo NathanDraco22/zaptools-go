@@ -130,7 +130,7 @@ func (t *EventProcessor) NotifyError(originEventName string, err error) {
 	t.EventCaller.TriggerEvent(ctx)
 }
 
-func (t *EventProcessor) StartEventStream(){
+func (t *EventProcessor) startEventStream(bufferSize int) {
 	t.NotifyConnected()
 	
 	defer func() {
@@ -138,7 +138,7 @@ func (t *EventProcessor) StartEventStream(){
 		t.NotifyDisconnected()
 	}()
 
-	writeChannel := make(chan *[]byte)
+	writeChannel := make(chan *[]byte, bufferSize)
 	t.Connection.writeChannel = writeChannel
 	
 	go func(messageChannel  <-chan *[]byte ) {
