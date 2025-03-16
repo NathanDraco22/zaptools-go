@@ -117,7 +117,31 @@ func (t *EventProcessor) NotifyDisconnected() {
 
 func (t *EventProcessor) NotifyError(originEventName string, err error) {
 	eventName := "error"
-	formattedPayload := fmt.Sprintf("An error occurred in the event %s: %s", originEventName, err.Error())
+	formattedPayload := fmt.Sprintf(
+		"An error occurred in the event %s:\n%s", 
+		originEventName, 
+		err.Error(),
+	)
+	eventData := &EventData{
+		EventName: eventName, 
+		Payload: formattedPayload, 
+		Headers: make(map[string]interface{}),
+	}
+	ctx:= &EventContext{
+		EventData: eventData,
+		Connection: t.Connection,
+	}
+	t.EventCaller.TriggerEvent(ctx)
+}
+
+func (t *EventProcessor) NotifySendError(eventSource *EventData,clientId string ,err error) {
+	eventName := "send-error"
+	formattedPayload := fmt.Sprintf(
+		"An error occurred trying to send to the event %s to client:%s\n%s",
+		eventSource.EventName,  
+		clientId,
+		err.Error(),
+	)
 	eventData := &EventData{
 		EventName: eventName, 
 		Payload: formattedPayload, 
@@ -138,14 +162,24 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 		t.NotifyDisconnected()
 	}()
 
-	writeChannel := make(chan *[]byte, bufferSize)
+	writeChannel := make(chan *EventData, bufferSize)
 	t.Connection.writeChannel = writeChannel
 	
-	go func(messageChannel  <-chan *[]byte ) {
-		for mesageData := range messageChannel {
-			err := t.StdConn.WriteMessage(1, *mesageData)
+	go func(eventDataChannel  <-chan *EventData ) {
+		for eventData := range eventDataChannel {
+			mesageData, err := json.Marshal(eventData)
 			if err != nil {
-				log.Println(err)
+				t.NotifySendError(eventData,t.Connection.Id, err)
+				t.StdConn.Close()
+				t.NotifyDisconnected()
+				return
+			}
+
+			err = t.StdConn.WriteMessage(1, mesageData)
+			if err != nil {
+				t.NotifySendError(eventData,t.Connection.Id, err)
+				t.StdConn.Close()
+				t.NotifyDisconnected()
 				return
 			}
 		}
