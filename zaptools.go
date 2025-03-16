@@ -4,11 +4,19 @@ import (
 	"github.com/NathanDraco22/zaptools-go/zap"
 )
 
-func NewConnector(register *zap.EventRegister, stdConn zap.StdConn, connectionId string) *zap.ZapConnector {
+type ConnectorOptions struct {
+	Register *zap.EventRegister 
+	StdConn zap.StdConn 
+	ConnectionId string
+	BufferSize int
+}
+
+func NewConnector(options ConnectorOptions) *zap.ZapConnector {
 	return &zap.ZapConnector{
-		Register: register,
-		StdConn: stdConn,
-		ConnectionId: connectionId,
+		Register: options.Register,
+		StdConn: options.StdConn,
+		ConnectionId: options.ConnectionId,
+		BufferSize: options.BufferSize,
 	}
 }
 

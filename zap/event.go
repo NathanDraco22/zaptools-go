@@ -117,7 +117,11 @@ func (t *EventProcessor) NotifyDisconnected() {
 
 func (t *EventProcessor) NotifyError(originEventName string, err error) {
 	eventName := "error"
-	formattedPayload := fmt.Sprintf("An error occurred in the event %s: %s", originEventName, err.Error())
+	formattedPayload := fmt.Sprintf(
+		"An error occurred in the event %s:\n%s", 
+		originEventName, 
+		err.Error(),
+	)
 	eventData := &EventData{
 		EventName: eventName, 
 		Payload: formattedPayload, 
@@ -130,19 +134,56 @@ func (t *EventProcessor) NotifyError(originEventName string, err error) {
 	t.EventCaller.TriggerEvent(ctx)
 }
 
-func (t *EventProcessor) StartEventStream(){
+func (t *EventProcessor) NotifySendError(eventSource *EventData,clientId string ,err error) {
+	eventName := "send-error"
+	formattedPayload := fmt.Sprintf(
+		"An error occurred trying to send to the event %s to client:%s\n%s",
+		eventSource.EventName,  
+		clientId,
+		err.Error(),
+	)
+	eventData := &EventData{
+		EventName: eventName, 
+		Payload: formattedPayload, 
+		Headers: make(map[string]interface{}),
+	}
+	ctx:= &EventContext{
+		EventData: eventData,
+		Connection: t.Connection,
+	}
+	t.EventCaller.TriggerEvent(ctx)
+}
+
+func (t *EventProcessor) startEventStream(bufferSize int) {
 	t.NotifyConnected()
+	
 	defer func() {
 		t.StdConn.Close()
 		t.NotifyDisconnected()
 	}()
 
-	contextChannel := make(chan *EventContext)
-	go func( eventCaller *EventCaller,contextChannel <-chan *EventContext ) {
-		for currentCtx := range contextChannel {
-			eventCaller.TriggerEvent(currentCtx)
+	writeChannel := make(chan *EventData, bufferSize)
+	t.Connection.writeChannel = writeChannel
+	
+	go func(eventDataChannel  <-chan *EventData ) {
+		for eventData := range eventDataChannel {
+			mesageData, err := json.Marshal(eventData)
+			if err != nil {
+				t.NotifySendError(eventData,t.Connection.Id, err)
+				t.StdConn.Close()
+				t.NotifyDisconnected()
+				return
+			}
+
+			err = t.StdConn.WriteMessage(1, mesageData)
+			if err != nil {
+				t.NotifySendError(eventData,t.Connection.Id, err)
+				t.StdConn.Close()
+				t.NotifyDisconnected()
+				return
+			}
 		}
-	}( t.EventCaller,contextChannel)
+	}(writeChannel)
 
 	for {
 		_, data, err := t.StdConn.ReadMessage()
@@ -165,6 +206,7 @@ func (t *EventProcessor) StartEventStream(){
 			EventData: &eventData,
 			Connection: t.Connection,
 		}
-		contextChannel <- ctx
+
+		t.EventCaller.TriggerEvent(ctx)
 	}
 }

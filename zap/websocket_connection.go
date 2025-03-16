@@ -1,9 +1,5 @@
 package zap
 
-import (
-	"encoding/json"
-)
-
 type StdConn interface {
 	ReadMessage() (messageType int, p []byte, err error)
 	WriteMessage(messageType int, data []byte) error
@@ -13,19 +9,14 @@ type StdConn interface {
 type WebSocketConnection struct {
 	Id string
 	conn StdConn
+	writeChannel chan <- *EventData
 }
 
 func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
-	jsonEventData, err := json.Marshal(eventData) 
-	if err != nil {
-		return err
-	}
-	err = t.conn.WriteMessage(1, jsonEventData)
-	if err != nil {
-		return err
-	}
-	return nil
 
+	t.writeChannel <-eventData
+	
+	return nil
 }
 
 
