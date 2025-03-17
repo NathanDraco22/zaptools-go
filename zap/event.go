@@ -88,6 +88,7 @@ type EventProcessor struct {
 }
 
 func (t *EventProcessor) NotifyConnected() {
+	t.Connection.IsConnected = true
 	eventName := "connected"
 	eventData := &EventData{
 		EventName: eventName, 
@@ -103,6 +104,9 @@ func (t *EventProcessor) NotifyConnected() {
 
 func (t *EventProcessor) NotifyDisconnected() {
 	eventName := "disconnected"
+	t.Connection.mu.Lock()
+	t.Connection.IsConnected = false
+	t.Connection.mu.Unlock()
 	eventData := &EventData{
 		EventName: eventName, 
 		Payload: make(map[string]interface{}), 
@@ -154,14 +158,7 @@ func (t *EventProcessor) NotifySendError(eventSource *EventData,clientId string 
 	t.EventCaller.TriggerEvent(ctx)
 }
 
-func (t *EventProcessor) startEventStream(bufferSize int) {
-	t.NotifyConnected()
-	
-	defer func() {
-		t.StdConn.Close()
-		t.NotifyDisconnected()
-	}()
-
+func (t *EventProcessor) startEventStream(bufferSize int) {	
 	writeChannel := make(chan *EventData, bufferSize)
 	t.Connection.writeChannel = writeChannel
 	
@@ -170,21 +167,28 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 			mesageData, err := json.Marshal(eventData)
 			if err != nil {
 				t.NotifySendError(eventData,t.Connection.Id, err)
-				t.StdConn.Close()
-				t.NotifyDisconnected()
 				return
 			}
 
 			err = t.StdConn.WriteMessage(1, mesageData)
 			if err != nil {
+				t.Connection.mu.Lock()
+				t.Connection.IsConnected = false
+				t.Connection.mu.Unlock()
 				t.NotifySendError(eventData,t.Connection.Id, err)
-				t.StdConn.Close()
-				t.NotifyDisconnected()
 				return
 			}
 		}
 	}(writeChannel)
 
+	defer func() {
+		t.StdConn.Close()
+		t.NotifyDisconnected()
+		close(writeChannel)
+	}()
+
+	t.NotifyConnected()
+	
 	for {
 		_, data, err := t.StdConn.ReadMessage()
 		if err != nil {
