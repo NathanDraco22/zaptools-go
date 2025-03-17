@@ -68,17 +68,29 @@ func NewEventRegister() *EventRegister {
 
 type EventCaller struct {
 	EventBook *EventBook
+	contextChannel chan *EventContext 
 }
 
 func (t *EventCaller) TriggerEvent(ctx *EventContext) {
-	event, err := t.EventBook.GetEvent(ctx.EventData.EventName)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	event.callback(ctx)
+	t.contextChannel <- ctx
 }
 
+func (t *EventCaller) Run(){
+	go func () {
+		for ctx := range t.contextChannel {
+			event, err := t.EventBook.GetEvent(ctx.EventData.EventName)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			event.callback(ctx)
+		}	
+	}()
+} 
+
+func (t *EventCaller) Stop() {
+	close(t.contextChannel)
+}
 //-----------------------------------
 
 type EventProcessor struct {
@@ -88,7 +100,7 @@ type EventProcessor struct {
 }
 
 func (t *EventProcessor) NotifyConnected() {
-	t.Connection.IsConnected = true
+	t.Connection.SetConnected(true)
 	eventName := "connected"
 	eventData := &EventData{
 		EventName: eventName, 
@@ -104,9 +116,7 @@ func (t *EventProcessor) NotifyConnected() {
 
 func (t *EventProcessor) NotifyDisconnected() {
 	eventName := "disconnected"
-	t.Connection.mu.Lock()
-	t.Connection.IsConnected = false
-	t.Connection.mu.Unlock()
+	t.Connection.SetConnected(false)
 	eventData := &EventData{
 		EventName: eventName, 
 		Payload: make(map[string]interface{}), 
@@ -159,9 +169,9 @@ func (t *EventProcessor) NotifySendError(eventSource *EventData,clientId string 
 }
 
 func (t *EventProcessor) startEventStream(bufferSize int) {	
+	t.EventCaller.Run()
 	writeChannel := make(chan *EventData, bufferSize)
 	t.Connection.writeChannel = writeChannel
-	
 	go func(eventDataChannel  <-chan *EventData ) {
 		for eventData := range eventDataChannel {
 			mesageData, err := json.Marshal(eventData)
@@ -172,9 +182,7 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 
 			err = t.StdConn.WriteMessage(1, mesageData)
 			if err != nil {
-				t.Connection.mu.Lock()
-				t.Connection.IsConnected = false
-				t.Connection.mu.Unlock()
+				t.Connection.SetConnected(false)
 				t.NotifySendError(eventData,t.Connection.Id, err)
 				return
 			}
@@ -182,9 +190,9 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 	}(writeChannel)
 
 	defer func() {
-		t.StdConn.Close()
-		t.NotifyDisconnected()
 		close(writeChannel)
+		t.NotifyDisconnected()
+		t.EventCaller.Stop()
 	}()
 
 	t.NotifyConnected()
@@ -192,7 +200,7 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 	for {
 		_, data, err := t.StdConn.ReadMessage()
 		if err != nil {
-			t.NotifyError("Failed to read message", err)
+			t.Connection.Close()
 			return
 		}
 		var eventData EventData
