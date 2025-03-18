@@ -2,6 +2,7 @@ package zap
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -20,18 +21,21 @@ type WebSocketConnection struct {
 }
 
 func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
-
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("SendEvent Recover:", err)
+		}
+	}()
 	if !t.GetIsConnected() {
-		return errors.New("not connected")
+		return errors.New("client is not connected")
 	}
 	t.writeChannel <- eventData
 	return nil
 }
 
 func (t *WebSocketConnection) Close() error {
-	t.mu.Lock()
-	t.isConnected = false
-	t.mu.Unlock()
+	t.setConnected(false)
+	close(t.writeChannel)
 	return t.conn.Close()
 }
 
@@ -41,7 +45,7 @@ func (t *WebSocketConnection) GetIsConnected() bool {
 	return t.isConnected
 }
 
-func (t *WebSocketConnection) SetConnected(value bool) {
+func (t *WebSocketConnection) setConnected(value bool) {
 	t.mu.Lock()
 	t.isConnected = value
 	t.mu.Unlock()
