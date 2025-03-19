@@ -10,7 +10,7 @@ type ZapConnector struct {
 
 func (t *ZapConnector) Start() {
 	eventCaller := &EventCaller{
-		EventBook: t.Register.EventBook,
+		eventBook: t.Register.eventBook,
 	}
 	connId := t.ConnectionId
 	if connId == "" {
