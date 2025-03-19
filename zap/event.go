@@ -2,6 +2,7 @@ package zap
 
 import (
 	"fmt"
+	"sync"
 )
 
 //-----------------------------------
@@ -29,6 +30,7 @@ type EventContext struct {
 
 type EventBook struct {
 	events map[string]Event
+	mu sync.RWMutex
 }
 
 func (t *EventBook) SaveEvent(event Event) {
@@ -36,7 +38,9 @@ func (t *EventBook) SaveEvent(event Event) {
 }
 
 func (t *EventBook) GetEvent(name string) (Event, error) {
+	t.mu.RLock()
 	res := t.events[name]
+	t.mu.RUnlock()
 	if res.callback == nil {
 		return Event{}, fmt.Errorf("event %s not found", name)
 	}
@@ -46,17 +50,17 @@ func (t *EventBook) GetEvent(name string) (Event, error) {
 //-----------------------------------
 
 type EventRegister struct {
-	EventBook *EventBook
+	eventBook *EventBook
 }
 
 func (t *EventRegister) OnEvent(name string, callback func(ctx *EventContext)) {
 	event := Event{Name: name, callback: callback}
-	t.EventBook.SaveEvent(event)
+	t.eventBook.SaveEvent(event)
 }
 
 func NewEventRegister() *EventRegister {
     return &EventRegister{
-        EventBook: &EventBook{
+        eventBook: &EventBook{
             events: make(map[string]Event),
         },
     }

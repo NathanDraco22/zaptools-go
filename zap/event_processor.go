@@ -36,10 +36,7 @@ func (t *EventProcessor) NotifyError(originEventName string, err error) {
 		EventData:  eventData,
 		Connection: t.Connection,
 	}
-	if !ctx.Connection.GetIsConnected() {
-		return
-	}
-	t.EventCaller.TriggerEvent(ctx)
+	t.EventCaller.TriggerEventSync(ctx)
 }
 
 func (t *EventProcessor) NotifySendError(eventSource *EventData, clientId string, err error) {
@@ -59,16 +56,12 @@ func (t *EventProcessor) NotifySendError(eventSource *EventData, clientId string
 		EventData:  eventData,
 		Connection: t.Connection,
 	}
-	if !ctx.Connection.GetIsConnected() {
-		return
-	}
-	t.EventCaller.TriggerEvent(ctx)
+	t.EventCaller.TriggerEventSync(ctx)
 }
 
 func (t *EventProcessor) startEventStream(bufferSize int) {
 	readyChannel := make(chan bool)
 	primaryCtx := t.createPrimaryContext()
-
 	t.EventCaller.Run(readyChannel, primaryCtx)
 
 	writeChannel := make(chan *EventData, bufferSize)
