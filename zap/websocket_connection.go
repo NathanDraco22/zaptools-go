@@ -2,7 +2,6 @@ package zap
 
 import (
 	"errors"
-	"log"
 	"sync"
 )
 
@@ -16,26 +15,29 @@ type WebSocketConnection struct {
 	Id           string
 	conn         StdConn
 	writeChannel chan<- *EventData
+	done         chan struct{}
+	closeOnce    sync.Once
 	isConnected  bool
 	mu           sync.RWMutex
 }
 
 func (t *WebSocketConnection) SendEvent(eventData *EventData) error {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("SendEvent Recover:", err)
-		}
-	}()
 	if !t.GetIsConnected() {
 		return errors.New("client is not connected")
 	}
-	t.writeChannel <- eventData
-	return nil
+	select {
+	case <-t.done:
+		return errors.New("client is disconnected")
+	case t.writeChannel <- eventData:
+		return nil
+	}
 }
 
 func (t *WebSocketConnection) Close() error {
 	t.setConnected(false)
-	close(t.writeChannel)
+	t.closeOnce.Do(func() {
+		close(t.done)
+	})
 	return t.conn.Close()
 }
 

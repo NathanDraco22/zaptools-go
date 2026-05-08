@@ -18,8 +18,9 @@ func (t *ZapConnector) Start() {
 	}
 	eventProcessor := &EventProcessor{
 		Connection: &WebSocketConnection{
-			Id: connId,
+			Id:   connId,
 			conn: t.StdConn,
+			done: make(chan struct{}),
 		},
 		EventCaller: eventCaller,
 		StdConn: t.StdConn,
