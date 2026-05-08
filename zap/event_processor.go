@@ -68,17 +68,22 @@ func (t *EventProcessor) startEventStream(bufferSize int) {
 	t.Connection.writeChannel = writeChannel
 
 	go func(eventDataChannel <-chan *EventData) {
-		for eventData := range eventDataChannel {
-			mesageData, err := json.Marshal(eventData)
-			if err != nil {
-				t.NotifySendError(eventData, t.Connection.Id, err)
+		for {
+			select {
+			case <-t.Connection.done:
 				return
-			}
-			err = t.StdConn.WriteMessage(1, mesageData)
-			if err != nil {
-				t.Connection.setConnected(false)
-				t.NotifySendError(eventData, t.Connection.Id, err)
-				return
+			case eventData := <-eventDataChannel:
+				mesageData, err := json.Marshal(eventData)
+				if err != nil {
+					t.NotifySendError(eventData, t.Connection.Id, err)
+					return
+				}
+				err = t.StdConn.WriteMessage(1, mesageData)
+				if err != nil {
+					t.Connection.setConnected(false)
+					t.NotifySendError(eventData, t.Connection.Id, err)
+					return
+				}
 			}
 		}
 	}(writeChannel)

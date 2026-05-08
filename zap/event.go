@@ -5,24 +5,24 @@ import (
 	"sync"
 )
 
-//-----------------------------------
+// -----------------------------------
 type Event struct {
-	Name string
+	Name     string
 	callback func(ctx *EventContext)
 }
 
 //-----------------------------------
 
 type EventData struct {
-	EventName string `json:"eventName"`
-	Payload interface{} `json:"payload"`
-	Headers map[string]interface{} `json:"headers"`
+	EventName string                 `json:"eventName"`
+	Payload   interface{}            `json:"payload"`
+	Headers   map[string]interface{} `json:"headers"`
 }
 
 //-----------------------------------
 
 type EventContext struct {
-	EventData *EventData
+	EventData  *EventData
 	Connection *WebSocketConnection
 }
 
@@ -30,10 +30,12 @@ type EventContext struct {
 
 type EventBook struct {
 	events map[string]Event
-	mu sync.RWMutex
+	mu     sync.RWMutex
 }
 
 func (t *EventBook) SaveEvent(event Event) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.events[event.Name] = event
 }
 
@@ -59,9 +61,9 @@ func (t *EventRegister) OnEvent(name string, callback func(ctx *EventContext)) {
 }
 
 func NewEventRegister() *EventRegister {
-    return &EventRegister{
-        eventBook: &EventBook{
-            events: make(map[string]Event),
-        },
-    }
+	return &EventRegister{
+		eventBook: &EventBook{
+			events: make(map[string]Event),
+		},
+	}
 }
